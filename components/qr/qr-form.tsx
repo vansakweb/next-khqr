@@ -61,7 +61,7 @@ export function QRForm() {
 
   const getImg = async (): Promise<void> => {
     if (state?.qr) {
-      const response = await fetch("/api/khqr", {
+      const response = await fetch("https://next-khqr.vercel.app/api/khqr", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
