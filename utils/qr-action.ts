@@ -1,47 +1,58 @@
 "use server";
-import { KHQR, COUNTRY, TAG } from "ts-khqr";
 
-export async function generateKHQR(_: unknown, formData: FormData) {
-  const currency = String(formData.get("currency"));
+import { BakongKHQR, IndividualInfo } from "bakong-khqr";
+
+export async function generate_khqr(_: unknown, formData: FormData) {
+  const bakongAccountID = String(formData.get("bakongAccountID"));
+  const merchantName = String(formData.get("merchantName"));
+  const currency = Number(formData.get("currency"));
   const amount = Number(formData.get("amount") || 0);
-  const merchantName = String(formData.get("name"));
-  const accountID = String(formData.get("id"));
+  const billNumber = String(formData.get("billNumber"));
+  const mobileNumber = String(formData.get("mobileNumber"));
 
-  const result = KHQR.generate({
-    tag: TAG.INDIVIDUAL, // TAG.MERCHANT
-    accountID,
+  const merchantInfo = {
+    bakongAccountID,
     merchantName,
-    // optional
-    merchantID: "011847089",
-    acquiringBank: "Dev Bank",
-    merchantCity: "Phnom Penh", // default 'Phnom Penh'
-    currency, // CURRENCY.KHR, // default KHR
-    amount, // default 0
-    countryCode: COUNTRY.KH, // default KH
-    merchantCategoryCode: "5999", // default "5999"
+    merchantCity: "Phnom Penh",
+    accountInformation: undefined,
+    acquiringBank: "BKRTKHPPXXX",
+    currency, // usd: 840, khr: 166 //khqrData.currency.khr,
+    amount,
+    billNumber,
+    storeLabel: "Web Dev Store",
+    terminalLabel: "Web Dev",
+    mobileNumber,
+    purposeOfTransaction: "Testing KHQR",
+    languagePreference: undefined,
+    merchantNameAlternateLanguage: undefined,
+    merchantCityAlternateLanguage: undefined,
+    upiMerchantAccount: undefined,
     expirationTimestamp: Date.now() + 1 * 60 * 1000, // required if amount is not null or zero (eg. expired in 1 minutes)
-    additionalData: {
-      mobileNumber: "85511847089",
-      billNumber: "INV-2026-02-04",
-      storeLabel: "Coffe Shop",
-      terminalLabel: "012345678",
-      purposeOfTransaction: "Payment",
+  };
+
+  const khqr = new BakongKHQR();
+  const response = khqr.generateIndividual(merchantInfo as IndividualInfo);
+
+  return response.data as { qr: string; md5: string } | null;
+}
+
+export const check_payment = async (_: unknown, formData: FormData) => {
+  const md5 = String(formData.get("md5"));
+
+  const uri = "https://api-bakong.nbc.gov.kh/v1/check_transaction_by_md5";
+  const res = await fetch(uri, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.TOKEN}`,
+      "Content-Type": "application/json",
     },
+    body: JSON.stringify({ md5 }),
   });
 
-  return result.data;
-}
-
-export async function verifyKHQR(_: unknown, formData: FormData) {
-  const khqrString = String(formData.get("qr"));
-  const isKHQR = KHQR.verify(khqrString).isValid;
-
-  return isKHQR;
-}
-
-export async function parseKHQR(_: unknown, formData: FormData) {
-  const khqrString = String(formData.get("qr"));
-  const result = KHQR.parse(khqrString);
-
-  return result;
-}
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Request failed: ${res.status} ${text}`);
+  }
+  const data = await res.json();
+  return data;
+};

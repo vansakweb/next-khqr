@@ -1,9 +1,12 @@
 "use client";
+
+import Image from "next/image";
 import { useActionState, useEffect, useState } from "react";
+import { generate_khqr } from "@/utils/qr-action";
+import { SubmitButton } from "@/components/qr/submit-button";
 import { FieldLegend } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -13,25 +16,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { generateKHQR } from "@/utils/qr-action";
-import { useFormStatus } from "react-dom";
-import Image from "next/image";
-import { check_payment } from "@/lib/check_payment";
 
-type Data = { currency: string; amount: string; name: string; id: string };
+type Data = {
+  currency: string;
+  amount: string;
+  merchantName: string;
+  bakongAccountID: string;
+  billNumber: string;
+  mobileNumber: string;
+};
 
 export function QRForm() {
   const [data, setData] = useState<Data>({
     currency: "840",
     amount: "0",
-    name: "Suon Vansak",
-    id: "suonvansak@kbrt",
+    merchantName: "Suon Vansak",
+    bakongAccountID: "suonvansak@bkrt",
+    billNumber: "Bill-001",
+    mobileNumber: "85511847089",
   });
-  const step = data.currency === "840" ? "0.01" : "100";
-  const { pending } = useFormStatus();
-  const [state, formAction] = useActionState(generateKHQR, null);
+  const [state, formAction] = useActionState(generate_khqr, null);
   const [img, setImg] = useState<string | null>("/image.png");
-  const [payment, setPayment] = useState(null);
 
   const formChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
@@ -59,38 +64,55 @@ export function QRForm() {
     });
   };
 
-  const getImg = async (): Promise<void> => {
-    if (state?.qr) {
-      const response = await fetch("https://next-khqr.vercel.app/api/khqr", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ qr: state.qr }),
-      });
-      const blob = await response.blob();
-      const dataUrl = URL.createObjectURL(blob);
-      setImg(dataUrl);
-    }
-  };
-  const checkPayment = async () => {
-    if (state?.md5) {
-      const pay = await check_payment(state.md5);
-      setPayment(pay);
-    }
-  };
   useEffect(() => {
-    if (state?.qr) {
-      getImg();
-    }
+    let objectUrl: string;
+
+    const getImg = async () => {
+      if (state?.qr) {
+        const response = await fetch("/api/khqr", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ qr: state.qr }),
+        });
+
+        const blob = await response.blob();
+        objectUrl = URL.createObjectURL(blob);
+        setImg(objectUrl);
+      }
+    };
+
+    getImg();
+
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
   }, [state?.qr]);
 
-  console.log(payment);
   return (
-    <div className="w-full p-4 flex gap-2 border shadow-2xl rounded-2xl justify-between flex-col-reverse md:flex-row">
-      <div className="md:w-80 md:p-4">
+    <div className="mx-auto min-w-72 p-4 flex gap-4 border shadow-2xl rounded-2xl flex-col-reverse md:flex-row">
+      <div className="w-full md:w-80">
         <form action={formAction} className="flex flex-col gap-4">
           <FieldLegend className="text-center">Payment</FieldLegend>
+          <div className="space-y-2">
+            <Select
+              name="bakongAccountID"
+              value={data.bakongAccountID}
+              onValueChange={(value) => selectChange("bakongAccountID", value)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select Account ID" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectLabel>Account ID</SelectLabel>
+                  <SelectItem value="suonvansak@bkrt">BAKONG</SelectItem>
+                  <SelectItem value="suonvansak@aclb">ACLEDA</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="space-y-2">
             <Select
               name="currency"
@@ -118,46 +140,46 @@ export function QRForm() {
               onChange={formChange}
               onBlur={onBlur}
               min={0}
-              step={step}
+              step={data.currency === "840" ? 0.01 : 100}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor="merchantName">Name</Label>
             <Input
-              name="name"
-              id="name"
-              value={data.name}
+              name="merchantName"
+              id="merchantName"
+              value={data.merchantName}
               onChange={formChange}
-              placeholder="Name"
+              placeholder="Merchant Name"
             />
           </div>
-          <div className="space-y-2 sr-only">
-            <Label htmlFor="id">Bakong Account ID</Label>
+          <div className="space-y-2">
+            <Label htmlFor="billNumber">Bill Number</Label>
             <Input
-              name="id"
-              id="id"
-              value={data.id}
+              name="billNumber"
+              id="billNumber"
+              value={data.billNumber}
               onChange={formChange}
-              placeholder="Bakong Account ID"
+              placeholder="Bill Number"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="mobileNumber">Mobile Number</Label>
+            <Input
+              name="mobileNumber"
+              id="mobileNumber"
+              value={data.mobileNumber}
+              onChange={formChange}
+              placeholder="Mobile Number"
             />
           </div>
           <div className="flex justify-between">
-            <Button disabled={pending} type="submit">
-              {!state ? "Get KHQR" : "Update KHQR"}
-            </Button>
-            {state?.md5 && (
-              <Button type="button" onClick={checkPayment}>
-                Check Payment
-              </Button>
-            )}
-          </div>
-          <div>
-            {/* <p>{payment && payment?.responseCode == 0 && "OK"}</p> */}
+            <SubmitButton hasState={!!state} />
           </div>
         </form>
       </div>
-      <div className="overflow-hidden md:w-80 rounded opacity-100">
-        <div>
+      <div className="w-full md:w-80 flex flex-col justify-center items-center">
+        <div className="w-fit h-fit rounded-md overflow-hidden">
           {img && (
             <Image
               loading="eager"
@@ -165,7 +187,7 @@ export function QRForm() {
               src={img}
               height={550}
               width={320}
-              className="aspect-auto w-full"
+              className="aspect-auto h-full object-contain"
             />
           )}
         </div>
